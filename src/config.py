@@ -1,0 +1,23 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
+BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+# Trading Settings
+TIMEFRAME = '15m'
+RSI_PERIOD = 14
+MFI_PERIOD = 14
+
+# Thresholds
+RSI_OVERSOLD = 20
+MFI_OVERSOLD = 25
+RSI_OVERBOUGHT = 80
+MFI_OVERBOUGHT = 80
+
+# Filters
+MIN_24H_VOLUME_USDT = 5000000  # Minimum 5 Million USDT volume to ensure liquidity

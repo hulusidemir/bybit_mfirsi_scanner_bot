@@ -1,0 +1,6 @@
+ccxt
+pandas
+pandas-ta
+python-dotenv
+python-telegram-bot
+schedule
