@@ -1,34 +1,34 @@
 # RSI & MFI Crypto Scanner Bot
 
-Bu bot, Bybit borsasındaki USDT paritelerini tarayarak RSI ve MFI indikatörlerine göre potansiyel Long ve Short fırsatlarını tespit eder ve Telegram üzerinden sinyal gönderir.
+This bot scans USDT pairs on the Bybit exchange to identify potential Long and Short opportunities based on RSI and MFI indicators, sending signals via Telegram.
 
-## Özellikler
+## Features
 
-- **Borsa:** Bybit (Perpetual Futures)
-- **Zaman Dilimi:** 15 Dakika (15m)
-- **Strateji:**
-  - **LONG:** RSI < 20 ve MFI < 25
-  - **SHORT:** RSI > 80 ve MFI > 80
-- **Filtreler:**
-  - 24 Saatlik Hacim (Likidite kontrolü için)
-  - VWAP (Trend teyidi için hesaplanır)
-- **Bildirimler:** Telegram
+- **Exchange:** Bybit (Perpetual Futures)
+- **Timeframe:** 15 Minutes (15m)
+- **Strategy:**
+  - **LONG:** RSI < 20 and MFI < 25
+  - **SHORT:** RSI > 80 and MFI > 80
+- **Filters:**
+  - **Dynamic Volume Filter:** Fetches fresh market data on every scan and only analyzes coins with 24h Volume > 5M USDT (configurable).
+  - **VWAP:** Calculated for trend confirmation.
+- **Notifications:** Telegram
 
-## Kurulum
+## Installation
 
-1. Projeyi klonlayın:
+1. Clone the project:
    ```bash
-   git clone https://github.com/kullaniciadi/rsi_mfi_scanner_bot.git
+   git clone https://github.com/username/rsi_mfi_scanner_bot.git
    cd rsi_mfi_scanner_bot
    ```
 
-2. Gerekli kütüphaneleri yükleyin:
+2. Install required libraries:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. `.env` dosyasını oluşturun:
-   `.env.example` dosyasının adını `.env` olarak değiştirin ve içerisine gerekli bilgileri girin.
+3. Create the `.env` file:
+   Rename `.env.example` to `.env` and fill in the required information.
    ```
    BYBIT_API_KEY=your_api_key
    BYBIT_API_SECRET=your_api_secret
@@ -36,16 +36,16 @@ Bu bot, Bybit borsasındaki USDT paritelerini tarayarak RSI ve MFI indikatörler
    TELEGRAM_CHAT_ID=your_telegram_chat_id
    ```
 
-## Kullanım
+## Usage
 
-Botu başlatmak için proje ana dizininde şu komutu çalıştırın:
+To start the bot, run the following command in the project root directory:
 
 ```bash
 python -m src.main
 ```
 
-Bot her 15 dakikada bir tarama yapacak ve uygun coinler için Telegram'a mesaj gönderecektir.
+The bot will scan every 15 minutes and send messages to Telegram for suitable coins.
 
-## Sorumluluk Reddi
+## Disclaimer
 
-Bu yazılım sadece eğitim ve bilgilendirme amaçlıdır. Yatırım tavsiyesi değildir. Kripto para piyasası yüksek risk içerir.
+This software is for educational and informational purposes only. It is not investment advice. The cryptocurrency market involves high risk.

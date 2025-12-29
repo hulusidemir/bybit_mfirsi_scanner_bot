@@ -2,11 +2,13 @@ import ccxt
 import pandas as pd
 import pandas_ta as ta
 import time
+from datetime import datetime, timedelta
 from src.config import (
     BYBIT_API_KEY, BYBIT_API_SECRET, TIMEFRAME,
     RSI_PERIOD, MFI_PERIOD, RSI_OVERSOLD, MFI_OVERSOLD,
     RSI_OVERBOUGHT, MFI_OVERBOUGHT, MIN_24H_VOLUME_USDT
 )
+from src.coingecko_manager import CoinGeckoManager
 
 class Scanner:
     def __init__(self):
@@ -18,6 +20,7 @@ class Scanner:
                 'defaultType': 'swap',  # Use 'swap' for perpetual futures
             }
         })
+        self.cg_manager = CoinGeckoManager()
 
     def get_tickers(self):
         """Fetch all USDT tickers and filter by volume"""
@@ -81,14 +84,26 @@ class Scanner:
             try:
                 funding_info = self.exchange.fetch_funding_rate(symbol)
                 data['funding_rate'] = funding_info.get('fundingRate', 'N/A')
-                data['next_funding'] = funding_info.get('fundingTimestamp', 'N/A')
+                
+                next_funding_ts = funding_info.get('fundingTimestamp')
+                if next_funding_ts:
+                    now = time.time() * 1000
+                    diff = next_funding_ts - now
+                    if diff > 0:
+                        td = timedelta(milliseconds=diff)
+                        # Format as HH:MM:SS
+                        data['next_funding'] = str(td).split('.')[0]
+                    else:
+                        data['next_funding'] = "00:00:00"
             except Exception as e:
                 print(f"Error fetching funding rate for {symbol}: {e}")
 
             # Open Interest
             try:
                 oi_data = self.exchange.fetch_open_interest(symbol)
-                data['open_interest'] = oi_data.get('openInterestAmount', 'N/A')
+                oi_val = oi_data.get('openInterestAmount')
+                if oi_val:
+                    data['open_interest'] = f"{oi_val:,.0f}"
             except Exception as e:
                 print(f"Error fetching open interest for {symbol}: {e}")
 
@@ -99,12 +114,40 @@ class Scanner:
             except Exception as e:
                 print(f"Error fetching ticker for {symbol}: {e}")
 
+            # Long/Short Ratio
+            try:
+                # Bybit V5 API for Long/Short Ratio
+                # period: 5min, 15min, 30min, 1h, 4h, 1d
+                # We use the same timeframe as the bot or '15min' explicitly
+                market_symbol = symbol.replace('/', '')
+                response = self.exchange.request(
+                    path='v5/market/account-ratio',
+                    api='public',
+                    method='GET',
+                    params={
+                        'category': 'linear',
+                        'symbol': market_symbol,
+                        'period': '15min',
+                        'limit': 1
+                    }
+                )
+                if response and 'result' in response and 'list' in response['result']:
+                    items = response['result']['list']
+                    if items:
+                        ratio = items[0].get('ratio', 'N/A')
+                        data['ls_ratio'] = ratio
+            except Exception as e:
+                # Silent fail or debug print
+                # print(f"Error fetching L/S ratio for {symbol}: {e}")
+                pass
+
             return data
         except Exception as e:
             print(f"Error in get_market_data for {symbol}: {e}")
             return data
 
     def analyze_coin(self, symbol):
+        print(f"Analyzing {symbol}...", end='\r')
         df = self.fetch_ohlcv(symbol)
         if df is None or len(df) < RSI_PERIOD:
             return None
@@ -132,9 +175,12 @@ class Scanner:
             signal = 'SHORT'
             
         if signal:
+            print(f"\nSignal found for {symbol}: {signal}")
             market_data = self.get_market_data(symbol)
+            cg_data = self.cg_manager.get_coin_details(symbol)
+            
             if market_data:
-                return {
+                result = {
                     'symbol': symbol,
                     'signal': signal,
                     'rsi': rsi,
@@ -143,5 +189,8 @@ class Scanner:
                     'vwap': last_candle['VWAP'],
                     **market_data
                 }
+                if cg_data:
+                    result.update(cg_data)
+                return result
         
         return None

@@ -1,11 +1,11 @@
 import time
-import schedule
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
 from src.scanner import Scanner
 from src.telegram_sender import TelegramSender
 
 def job():
-    print(f"Starting scan at {datetime.now()}")
+    print(f"\nStarting scan at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     scanner = Scanner()
     sender = TelegramSender()
     
@@ -33,16 +33,21 @@ def job():
                     fr_str = str(fr)
 
                 message = (
-                    f"{emoji} {signal_type} sinyali alındı.\n"
-                    f"Coin Adı: {result['symbol']}\n"
-                    f"Fiyat: {result['price']}\n"
-                    f"RSI Değeri: {result['rsi']:.2f}\n"
-                    f"MFI Değeri: {result['mfi']:.2f}\n"
+                    f"{emoji} {signal_type} signal detected.\n"
+                    f"Coin: {result['symbol']}\n"
+                    f"Price: {result['price']}\n"
+                    f"RSI: {result['rsi']:.2f}\n"
+                    f"MFI: {result['mfi']:.2f}\n"
                     f"VWAP: {result['vwap']:.4f}\n"
-                    f"Funding Rate: {fr_str}\n"
+                    f"Funding Rate: {fr_str} (Next: {result.get('next_funding', 'N/A')})\n"
                     f"Long/Short Ratio: {result['ls_ratio']}\n"
-                    f"24 h Volume: {vol_str}\n"
-                    f"24 h Open Interest: {result['open_interest']}"
+                    f"24h Volume: {vol_str}\n"
+                    f"24h Open Interest: {result['open_interest']}\n"
+                    f"--------------------------------\n"
+                    f"Market Cap: ${result.get('market_cap', 'N/A'):,.0f}\n"
+                    f"Rank: #{result.get('rank', 'N/A')}\n"
+                    f"Category: {result.get('categories', 'N/A')}\n"
+                    f"Description: {result.get('description', 'N/A')}"
                 )
                 
                 print(f"Sending signal for {symbol}")
@@ -52,22 +57,36 @@ def job():
             time.sleep(0.1)
             
         except Exception as e:
-            print(f"Error processing {symbol}: {e}")
+            print(f"\nError processing {symbol}: {e}")
 
-    print("Scan completed.")
+    print("\nScan completed.")
+
+def countdown(t):
+    while t:
+        mins, secs = divmod(t, 60)
+        timer = '{:02d}:{:02d}'.format(mins, secs)
+        print(f"Next scan in: {timer}", end="\r")
+        time.sleep(1)
+        t -= 1
+    print(" " * 20, end="\r") # Clear line
 
 def main():
-    print("Bot started. Waiting for next scan...")
+    sender = TelegramSender()
+    startup_msg = "🚀 rsi_mfi_scanner Bot Started Scanning"
+    print(startup_msg)
+    sender.send_message(startup_msg)
+    
     try:
-        # Run immediately on start
-        job()
-        
-        # Schedule every 15 minutes
-        schedule.every(15).minutes.do(job)
-        
         while True:
-            schedule.run_pending()
-            time.sleep(1)
+            job()
+            
+            # Wait 5 minutes with countdown
+            wait_seconds = 5 * 60
+            print(f"Waiting {wait_seconds/60:.0f} minutes for next scan...")
+            countdown(wait_seconds)
+            
+    except KeyboardInterrupt:
+        print("\nBot stopped by user.")
     except KeyboardInterrupt:
         print("\nBot stopped by user.")
 
