@@ -3,8 +3,9 @@ import sys
 from datetime import datetime, timedelta
 from src.scanner import Scanner
 from src.telegram_sender import TelegramSender
+from src.config import ALERT_COOLDOWN_MINUTES
 
-def job():
+def job(sent_alerts):
     print(f"\nStarting scan at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     scanner = Scanner()
     sender = TelegramSender()
@@ -15,6 +16,16 @@ def job():
         try:
             result = scanner.analyze_coin(symbol)
             if result:
+                # Check cooldown
+                if symbol in sent_alerts:
+                    last_alert_time = sent_alerts[symbol]
+                    if datetime.now() - last_alert_time < timedelta(minutes=ALERT_COOLDOWN_MINUTES):
+                        print(f"Skipping alert for {symbol} (Cooldown active)")
+                        continue
+
+                # Update last alert time
+                sent_alerts[symbol] = datetime.now()
+
                 # Format Message
                 signal_type = result['signal']
                 emoji = "🟢" if signal_type == 'LONG' else "🔴"
@@ -76,9 +87,11 @@ def main():
     print(startup_msg)
     sender.send_message(startup_msg)
     
+    sent_alerts = {}
+
     try:
         while True:
-            job()
+            job(sent_alerts)
             
             # Wait 5 minutes with countdown
             wait_seconds = 5 * 60

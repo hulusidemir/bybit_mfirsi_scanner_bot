@@ -21,3 +21,6 @@ MFI_OVERBOUGHT = 80
 
 # Filters
 MIN_24H_VOLUME_USDT = 5000000  # Minimum 5 Million USDT volume to ensure liquidity
+
+# Alert Settings
+ALERT_COOLDOWN_MINUTES = 60  # Minutes to wait before sending another alert for the same coin
