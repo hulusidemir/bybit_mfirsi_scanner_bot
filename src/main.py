@@ -72,7 +72,7 @@ def job(sent_alerts):
                     f"24h Volume: {vol_str}\n"
                     f"24h Open Interest: {result['open_interest']}\n"
                     f"--------------------------------\n"
-                    f"Market Cap: ${result.get('market_cap', 'N/A'):,.0f}\n"
+                    f"Market Cap: {result.get('market_cap', 'N/A')}\n"
                     f"Rank: #{result.get('rank', 'N/A')}\n"
                     f"Category: {result.get('categories', 'N/A')}\n"
                     f"Description: {result.get('description', 'N/A')}"
