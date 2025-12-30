@@ -43,12 +43,29 @@ def job(sent_alerts):
                 else:
                     fr_str = str(fr)
 
+                # ADX Interpretation
+                adx_val = result.get('adx', 0)
+                adx_str = "N/A"
+                if isinstance(adx_val, (int, float)):
+                    if adx_val < 20:
+                        trend_strength = "Weak Trend"
+                    elif adx_val < 25:
+                        trend_strength = "Weak to Moderate Trend"
+                    elif adx_val < 50:
+                        trend_strength = "Strong Trend"
+                    elif adx_val < 75:
+                        trend_strength = "Very Strong Trend"
+                    else:
+                        trend_strength = "Extremely Strong Trend"
+                    adx_str = f"{adx_val:.2f} - {trend_strength}"
+
                 message = (
                     f"{emoji} {signal_type} signal detected.\n"
                     f"Coin: {result['symbol']}\n"
                     f"Price: {result['price']}\n"
                     f"RSI: {result['rsi']:.2f}\n"
                     f"MFI: {result['mfi']:.2f}\n"
+                    f"ADX: {adx_str}\n"
                     f"VWAP: {result['vwap']:.4f}\n"
                     f"Funding Rate: {fr_str} (Next: {result.get('next_funding', 'N/A')})\n"
                     f"Long/Short Ratio: {result['ls_ratio']}\n"

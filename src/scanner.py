@@ -53,7 +53,7 @@ class Scanner:
             return None
 
     def calculate_indicators(self, df):
-        """Calculate RSI, MFI, and VWAP"""
+        """Calculate RSI, MFI, VWAP, and ADX"""
         try:
             # RSI
             df['RSI'] = ta.rsi(df['close'], length=RSI_PERIOD)
@@ -63,6 +63,11 @@ class Scanner:
             
             # VWAP
             df['VWAP'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'])
+
+            # ADX
+            adx = ta.adx(df['high'], df['low'], df['close'], length=14)
+            if adx is not None:
+                df = pd.concat([df, adx], axis=1)
             
             return df
         except Exception as e:
@@ -119,14 +124,16 @@ class Scanner:
                 # Bybit V5 API for Long/Short Ratio
                 # period: 5min, 15min, 30min, 1h, 4h, 1d
                 # We use the same timeframe as the bot or '15min' explicitly
-                market_symbol = symbol.replace('/', '')
+                market = self.exchange.market(symbol)
+                market_id = market['id']
+                
                 response = self.exchange.request(
                     path='v5/market/account-ratio',
                     api='public',
                     method='GET',
                     params={
                         'category': 'linear',
-                        'symbol': market_symbol,
+                        'symbol': market_id,
                         'period': '15min',
                         'limit': 1
                     }
@@ -162,6 +169,7 @@ class Scanner:
 
         rsi = last_candle['RSI']
         mfi = last_candle['MFI']
+        adx = last_candle.get('ADX_14', 0)
         
         signal = None
         
@@ -185,6 +193,7 @@ class Scanner:
                     'signal': signal,
                     'rsi': rsi,
                     'mfi': mfi,
+                    'adx': adx,
                     'price': last_candle['close'],
                     'vwap': last_candle['VWAP'],
                     **market_data
