@@ -18,7 +18,7 @@ This bot scans USDT pairs on the Bybit exchange to identify potential Long and S
 
 1. Clone the project:
    ```bash
-   git clone https://github.com/username/rsi_mfi_scanner_bot.git
+   git clone https://github.com/hulusidemir/rsi_mfi_scanner_bot.git
    cd rsi_mfi_scanner_bot
    ```
 
