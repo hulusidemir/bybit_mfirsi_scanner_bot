@@ -8,6 +8,10 @@ class CoinGeckoManager:
         self.last_update = 0
         self.update_interval = 86400 # Update map once a day
         
+        # Cache for coin details: {coin_id: (data, timestamp)}
+        self.details_cache = {}
+        self.cache_duration = 3600 # 1 hour cache for details
+        
     def update_coin_map(self):
         """Fetch coin list and create a symbol -> id map"""
         try:
@@ -50,6 +54,12 @@ class CoinGeckoManager:
         if not coin_id:
             return None
 
+        # Check cache
+        if coin_id in self.details_cache:
+            cached_data, timestamp = self.details_cache[coin_id]
+            if time.time() - timestamp < self.cache_duration:
+                return cached_data
+
         try:
             url = f"{self.base_url}/coins/{coin_id}"
             params = {
@@ -60,7 +70,10 @@ class CoinGeckoManager:
                 'developer_data': 'false',
                 'sparkline': 'false'
             }
-            response = requests.get(url, params=params)
+            
+            # Single request with timeout, no retries
+            response = requests.get(url, params=params, timeout=5)
+            
             if response.status_code == 200:
                 data = response.json()
                 
@@ -72,18 +85,39 @@ class CoinGeckoManager:
                 if len(description) > 500:
                     description = description[:497] + "..."
 
-                return {
+                result = {
                     'market_cap': data.get('market_data', {}).get('market_cap', {}).get('usd', 0),
                     'rank': data.get('market_cap_rank', 'N/A'),
                     'categories': ", ".join(data.get('categories', [])),
                     'description': description
                 }
+                
+                # Save to cache
+                self.details_cache[coin_id] = (result, time.time())
+                return result
+                
             elif response.status_code == 429:
-                print("CoinGecko Rate Limit Hit!")
-                return None
+                print("CoinGecko Rate Limit Hit! Skipping.")
+                return {
+                    'market_cap': 'N/A',
+                    'rank': 'N/A',
+                    'categories': 'N/A',
+                    'description': '⚠️ CoinGecko Rate Limit Hit (Skipped)'
+                }
             else:
                 print(f"CoinGecko API Error: {response.status_code}")
-                return None
+                return {
+                    'market_cap': 'N/A',
+                    'rank': 'N/A',
+                    'categories': 'N/A',
+                    'description': f'⚠️ CoinGecko Error: {response.status_code}'
+                }
+            
         except Exception as e:
             print(f"Error fetching CoinGecko details: {e}")
-            return None
+            return {
+                'market_cap': 'N/A',
+                'rank': 'N/A',
+                'categories': 'N/A',
+                'description': '⚠️ CoinGecko Connection Error'
+            }
