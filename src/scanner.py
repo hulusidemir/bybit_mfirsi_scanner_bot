@@ -6,7 +6,9 @@ from datetime import datetime, timedelta
 from src.config import (
     BYBIT_API_KEY, BYBIT_API_SECRET, TIMEFRAME,
     RSI_PERIOD, MFI_PERIOD, RSI_OVERSOLD, MFI_OVERSOLD,
-    RSI_OVERBOUGHT, MFI_OVERBOUGHT, MIN_24H_VOLUME_USDT
+    RSI_OVERBOUGHT, MFI_OVERBOUGHT, MIN_24H_VOLUME_USDT,
+    PSAR_ENABLED, PSAR_AF, PSAR_MAX, PSAR_CONSECUTIVE_BARS,
+    TD_SEQ_ENABLED
 )
 from src.coingecko_manager import CoinGeckoManager
 
@@ -52,6 +54,48 @@ class Scanner:
             print(f"Error fetching OHLCV for {symbol}: {e}")
             return None
 
+    def calculate_td_sequential(self, df):
+        """Calculate TD Sequential Setup"""
+        try:
+            close = df['close']
+            
+            td_buy = []
+            td_sell = []
+            
+            buy_count = 0
+            sell_count = 0
+            
+            for i in range(len(df)):
+                if i < 4:
+                    td_buy.append(0)
+                    td_sell.append(0)
+                    continue
+                    
+                c = close.iloc[i]
+                c4 = close.iloc[i-4]
+                
+                # Buy Setup: Close < Close[4]
+                if c < c4:
+                    buy_count += 1
+                else:
+                    buy_count = 0
+                    
+                # Sell Setup: Close > Close[4]
+                if c > c4:
+                    sell_count += 1
+                else:
+                    sell_count = 0
+                    
+                td_buy.append(buy_count)
+                td_sell.append(sell_count)
+                
+            df['TD_Buy'] = td_buy
+            df['TD_Sell'] = td_sell
+            return df
+        except Exception as e:
+            print(f"Error calculating TD Sequential: {e}")
+            return df
+
     def calculate_indicators(self, df):
         """Calculate RSI, MFI, VWAP, and ADX"""
         try:
@@ -68,6 +112,24 @@ class Scanner:
             adx = ta.adx(df['high'], df['low'], df['close'], length=14)
             if adx is not None:
                 df = pd.concat([df, adx], axis=1)
+
+            # Parabolic SAR
+            if PSAR_ENABLED:
+                psar = ta.psar(df['high'], df['low'], df['close'], af0=PSAR_AF, af=PSAR_AF, max_af=PSAR_MAX)
+                if psar is not None:
+                    # Combine PSARl and PSARs into one column
+                    # Column names are dynamic based on AF and MAX
+                    psar_l_col = f"PSARl_{PSAR_AF}_{PSAR_MAX}"
+                    psar_s_col = f"PSARs_{PSAR_AF}_{PSAR_MAX}"
+                    
+                    # Check if columns exist (pandas_ta might format float differently in string)
+                    # A safer way is to take the first two columns which are usually Long and Short
+                    if not psar.empty:
+                        df['PSAR'] = psar.iloc[:, 0].fillna(psar.iloc[:, 1])
+
+            # TD Sequential
+            if TD_SEQ_ENABLED:
+                df = self.calculate_td_sequential(df)
             
             return df
         except Exception as e:
@@ -172,18 +234,68 @@ class Scanner:
         adx = last_candle.get('ADX_14', 0)
         
         signal = None
+        td_note = ""
         
         # Strategy Logic
         # Long: RSI < 20 and MFI < 25
         if rsi < RSI_OVERSOLD and mfi < MFI_OVERSOLD:
             signal = 'LONG'
+            if PSAR_ENABLED and 'PSAR' in df.columns:
+                # Check if price has been BELOW PSAR for the last N bars
+                # We look at the last N closed candles
+                last_n_candles = df.iloc[-(PSAR_CONSECUTIVE_BARS + 1):-1]
+                if len(last_n_candles) < PSAR_CONSECUTIVE_BARS:
+                    signal = None # Not enough data
+                else:
+                    # Check if ALL closes are < PSAR
+                    if not (last_n_candles['close'] < last_n_candles['PSAR']).all():
+                        signal = None
             
+            if TD_SEQ_ENABLED and signal == 'LONG':
+                # Check last 5 closed candles for TD Buy 9 or 13
+                # df.iloc[-2] is last_candle (closed)
+                # We want range [-6:-1] -> indices -6, -5, -4, -3, -2
+                recent_td = df['TD_Buy'].iloc[-6:-1]
+                has_9 = (recent_td == 9).any()
+                has_13 = (recent_td == 13).any()
+                
+                if not (has_9 or has_13):
+                    signal = None
+                else:
+                    if has_13:
+                        td_note = "TD Buy 13"
+                    else:
+                        td_note = "TD Buy 9"
+
         # Short: RSI > 80 and MFI > 80
         elif rsi > RSI_OVERBOUGHT and mfi > MFI_OVERBOUGHT:
             signal = 'SHORT'
+            if PSAR_ENABLED and 'PSAR' in df.columns:
+                # Check if price has been ABOVE PSAR for the last N bars
+                last_n_candles = df.iloc[-(PSAR_CONSECUTIVE_BARS + 1):-1]
+                if len(last_n_candles) < PSAR_CONSECUTIVE_BARS:
+                    signal = None
+                else:
+                    # Check if ALL closes are > PSAR
+                    if not (last_n_candles['close'] > last_n_candles['PSAR']).all():
+                        signal = None
+            
+            if TD_SEQ_ENABLED and signal == 'SHORT':
+                # Check last 5 closed candles for TD Sell 9 or 13
+                recent_td = df['TD_Sell'].iloc[-6:-1]
+                has_9 = (recent_td == 9).any()
+                has_13 = (recent_td == 13).any()
+                
+                if not (has_9 or has_13):
+                    signal = None
+                else:
+                    if has_13:
+                        td_note = "TD Sell 13"
+                    else:
+                        td_note = "TD Sell 9"
             
         if signal:
-            print(f"\nSignal found for {symbol}: {signal}")
+            print(f"\nSignal found for {symbol}: {signal} {td_note}")
             market_data = self.get_market_data(symbol)
             cg_data = self.cg_manager.get_coin_details(symbol)
             
@@ -196,6 +308,10 @@ class Scanner:
                     'adx': adx,
                     'price': last_candle['close'],
                     'vwap': last_candle['VWAP'],
+                    'psar': last_candle['PSAR'] if 'PSAR' in last_candle else 'N/A',
+                    'td_buy': last_candle.get('TD_Buy', 0),
+                    'td_sell': last_candle.get('TD_Sell', 0),
+                    'td_note': td_note,
                     **market_data
                 }
                 if cg_data:
